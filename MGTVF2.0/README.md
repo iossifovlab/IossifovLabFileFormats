@@ -9,21 +9,52 @@ the multinomial genotyper described in [REF].
 The data is stored in a directory with the following files:
 
     * README.md 
-    * <dataset id>.ped
-    * <dataset id>-denovo.txt.gz
-    * <dataset id>-denovo.txt.gz.tbi
-    * <dataset id>-transmitted.txt.gz
-    * <dataset id>-transmitted.txt.gz.tbi
-    * <genome id>.fa
-    * <genome id>.fa.fai
-    * <gene models>.txt.gz
+    * {dataset id}.ped
+    * {dataset id}-denovo.txt.gz
+    * {dataset id}-denovo.txt.gz.tbi
+    * {dataset id}-transmitted.txt.gz
+    * {dataset id}-transmitted.txt.gz.tbi
+    * {genome id}.fa
+    * {genome id}.fa.fai
+    * {gene models}-genes.txt.gz
 
     
+### The {dataset id}.ped
+
+The file lists all individuals included in the dataset and their 
+family relationships. We based the basic structure of the file's format on the 
+standard pedigree files. The columns used are:
+
+1. **familyId**	SSC family id. For example, 11234.
+1. **personId**	SSC person id. For example, 11234.p1.
+1. **momId**	The person id of the mother.
+1. **dadId**	The person id of the father.
+1. **sex**	The person's sex, M for male and F for female.
+1. **status**	Shows if the person is 'affected' or 'unaffected' with autism.
+1. **role**	The person's role. In SSC, there are four roles encoded with a 
+        three-letter abbreviation:
+   - prb stands for proband;
+   - sib stands for the proband's sibling;
+   - mom stands for the proband's mother; and
+   - dad stands for the proband's father.
+
+### The <dataset id>-denovo.txt.gz file
 
 ## Setup for the mgtvf_2_0_to_vcf.py
 
-Requires python 3.8 or greater.
-Needs pysam 0.16.0.1
+### Requirements
 
+The mgtvf_2_0_to_vcf.py script requires python 3.8 or greater and 
+pysam 0.16.0.1. The following commands create and activate a new conda 
+environment named `new_environment` meeting these requirements is:
 
+```
+$ conda env create -c default -c conda_forge -c bioconda --name new_environment 
+python>=3.8 pysam>=0.16.0.1
+
+$ conda activate new_environment
+```
 ## Usage of the mgtvf_2_0_to_vcf.py
+
+The `mgtvf_2_0_to_vcf.py --help` provides a detailed description of the 
+mgtvf_2_0_to_vcf.py's arguments.

@@ -37,6 +37,8 @@ import pysam
 
 # TODO: Add filters by effect and frequency
 
+# TODO: Set up tests with a small dataset.
+
 # TODO: Add filters by gene!
 
 # TODO: setup.py / add to pypy / iossifovlab in anaconda
@@ -105,13 +107,13 @@ class VCFOutFile:
               f"##reference={genome_id}",
               file=self.file)
         for chrom in used_chromosomes:
-            print(f"contig=<ID={chrom},length={all_chromosomes[chrom]}>",
+            print(f"##contig=<ID={chrom},length={all_chromosomes[chrom]}>",
                   file=self.file)
-        print('#FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+        print('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
               file=self.file)
-        print('#FORMAT=<ID=AD,Number=1,Type=String,Description="Number of '
+        print('##FORMAT=<ID=AD,Number=3,Type=Integer,Description="Number of '
               'reads for the reference, alternative, and sometimes other '
-              'alleles." >',
+              'alleles.">',
               file=self.file)
         print(*'#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT'.split(' '),
               *self.samples, sep="\t", file=self.file)
@@ -119,7 +121,7 @@ class VCFOutFile:
     def add_position(self, chrom, pos, ref, alt, person_genotypes):
         if not (set(person_genotypes) & self.samples_set):
             return
-        gens = [person_genotypes.get(person_id, "./.:.")
+        gens = [person_genotypes.get(person_id, "./.:.,.,.")
                 for person_id in self.samples]
 
         print(*[chrom, pos, ".", ref, alt, ".", ".", ".", "GT:AD"],
