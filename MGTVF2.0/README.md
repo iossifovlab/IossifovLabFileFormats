@@ -38,7 +38,37 @@ standard pedigree files. The columns used are:
    - mom stands for the proband's mother; and
    - dad stands for the proband's father.
 
-### The <dataset id>-denovo.txt.gz file
+### The {dataset id}-denovo.txt.gz file
+
+1. **CHROM**
+1. **POS**
+1. **REF**
+1. **ALT**
+1. **worst_effect**
+1. **effects**
+1. **effect_details**
+1. **parents called**
+1. **allele count**
+1. **allele frequency**
+1. **carriers**
+1. **family_genotypes**
+
+### The {dataset id}-transmitted.txt.gz file
+
+1. **CHROM** - the CHROM, POS, REF, and ALT columns describe one alternative 
+                allele, following precisely the representation used in VCF.  
+                MGTVF2.0 does not allow more than one alternative alleles.
+1. **POS**
+1. **REF**
+1. **ALT**
+1. **worst_effect** 
+1. **effects**
+1. **effect_details**
+1. **parents called**
+1. **allele count**
+1. **allele frequency**
+1. **family_genotypes** - 
+
 
 ## Setup for the mgtvf_2_0_to_vcf.py
 
