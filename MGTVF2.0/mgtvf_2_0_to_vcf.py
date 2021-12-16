@@ -10,10 +10,6 @@ from typing import List, Dict, Tuple
 
 import pysam
 
-# TODO: Run through VCF validator
-
-# TODO: Store the effect and frequency in the INFO field
-
 # TODO: Handle the limit for the number of open files.
 #    Solution 1:
 #       If the limit is reached, split the files into batches run a pass over
@@ -72,6 +68,7 @@ class Person:
     sex: str
     status: str
     role: str
+    family_genotype_index: int
 
 
 def load_pedigree() -> Tuple[Dict[str, List[Person]], Dict[str, List[Person]]]:
@@ -83,8 +80,15 @@ def load_pedigree() -> Tuple[Dict[str, List[Person]], Dict[str, List[Person]]]:
         for line in file:
             cs = line.strip("\n\r").split("\t")
             p = Person(*cs)
+            p.family_genotype_index = int(p.family_genotype_index)
             families[p.familyId].append(p)
             persons[p.personId].append(p)
+    families = {fid: sorted(pds, key=lambda pd: pd.family_genotype_index)
+                for fid, pds in families.items()}
+    for fid, pds in families.items():
+        for idx, pd in enumerate(pds):
+            assert idx == pd.family_genotype_index, \
+                f"family {fid} has mismatched family_genotype indexes"
     return persons, families
 
 
@@ -109,22 +113,36 @@ class VCFOutFile:
         for chrom in used_chromosomes:
             print(f"##contig=<ID={chrom},length={all_chromosomes[chrom]}>",
                   file=self.file)
-        print('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
-              file=self.file)
-        print('##FORMAT=<ID=AD,Number=3,Type=Integer,Description="Number of '
-              'reads for the reference, alternative, and sometimes other '
-              'alleles.">',
-              file=self.file)
+        metaData = '''
+##INFO=<ID=WE,Number=A,Type=String,Description="The worst effect.">
+##INFO=<ID=GE,Number=A,Type=String,Description="Gene effects.">
+##INFO=<ID=DE,Number=A,Type=String,Description="Detailed effects.">
+##INFO=<ID=NP,Number=1,Type=Integer,Description="Number of Genotyped Parents.">
+##INFO=<ID=ACP,Number=A,Type=Integer,Description="Count of alternative alleles in parents.">
+##INFO=<ID=AFP,Number=A,Type=Float,Description="Alternative Allele Frequency Percent In Parents.">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=.,Type=Integer,Description="Number of reads for the reference, alternative, and sometimes other alleles.">
+'''  # noqa
+        metaData = metaData.strip("\n")
+        print(metaData, file=self.file)
         print(*'#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT'.split(' '),
               *self.samples, sep="\t", file=self.file)
 
-    def add_position(self, chrom, pos, ref, alt, person_genotypes):
+    def add_position(self, chrom, pos, ref, alt, worst_effect, effects,
+                     effect_details, parents_called, allele_count,
+                     allele_frequency, person_genotypes):
         if not (set(person_genotypes) & self.samples_set):
             return
         gens = [person_genotypes.get(person_id, "./.:.,.,.")
                 for person_id in self.samples]
 
-        print(*[chrom, pos, ".", ref, alt, ".", ".", ".", "GT:AD"],
+        infoStr = f"WE={worst_effect};" + \
+            f"GE={effects.replace(';', '|')};" + \
+            f"DE={effect_details.replace(';', '|')};" + \
+            f"NP={parents_called};" + \
+            f"ACP={allele_count};" + \
+            f"AFP={allele_frequency}"
+        print(*[chrom, pos, ".", ref, alt, ".", ".", infoStr, "GT:AD"],
               *gens, sep="\t", file=self.file)
 
     def close(self):
@@ -182,9 +200,11 @@ parser.add_argument('out_dir', default=".", nargs="?",
 
 parser.add_argument('--mode', default="all",
                     help="The structure of the VCF files: "
-                    "'all' - one VCF file (all.vcf);"
-                    "'by_family' - a VCF file for each family (family-<familyId>.vcf); "
-                    "'by_person' - a VCF file for each person (person-<personId>.vcf).")
+                    "'all' - one VCF file (all.vcf); "
+                    "'by_family' - a VCF file for each family "
+                    "(family-<familyId>.vcf); "
+                    "'by_person' - a VCF file for each person "
+                    "(person-<personId>.vcf).")
 parser.add_argument('--families', default=None,
                     help="Comma separated list of family ids to expert.")
 parser.add_argument('--persons', default=None,
@@ -214,34 +234,36 @@ all_vcf_families = {fid for out_file in out_files for fid in out_file.families}
 for out_file in out_files:
     out_file.open()
 
-n_out_poss = 0
-with pysam.TabixFile(get_file_name("-family.txt.gz")) as in_file:
+with pysam.TabixFile(get_file_name("-transmitted.txt.gz")) as in_file:
     if args.region:
         line_gen = in_file.fetch(chrom, start, end)
     else:
         line_gen = in_file.fetch()
     for line in line_gen:
         # print(line)
-        chrom, pos, ref, alt, all_genotypes_str = line.strip(
-            "\n\r").split("\t")
+        chrom, pos, ref, alt, worst_effect, effects, effect_details, \
+            parents_called, allele_count, allele_frequencey, \
+            all_genotypes_str = line.strip("\n\r").split("\t")
         family_genotypes_str = all_genotypes_str.split(";")
         family_genotypes = {}
         for family_genotype_str in family_genotypes_str:
-            familyId, members_genotype_str = family_genotype_str.split(" ", 1)
-            family_genotypes[familyId] = members_genotype_str
+            family_id, members_genotype_str = family_genotype_str.split(" ", 1)
+            family_genotypes[family_id] = members_genotype_str
         person_genotypes = {}
         for family_id in all_vcf_families & set(family_genotypes.keys()):
-            for member_genotype_str in \
-                    family_genotypes[family_id].split(" "):
-                pid, role, sex, status, gen, cnts = member_genotype_str.split(
-                    ":")
-                person_genotypes[pid] = f"{gen}:{cnts}"
+            member_genotype_strs = family_genotypes[family_id].split(" ")
+            assert len(member_genotype_strs) == len(all_families[family_id])
+            for member_genotype_str, pd in zip(member_genotype_strs,
+                                               all_families[family_id]):
+                gen, cnts = member_genotype_str.split(":")
+                person_genotypes[pd.personId] = f"{gen}:{cnts}"
         if len(person_genotypes) == 0:
             continue
         for out_file in out_files:
-            out_file.add_position(chrom, pos, ref, alt, person_genotypes)
-        n_out_poss += 1
-        #
+            out_file.add_position(chrom, pos, ref, alt,
+                                  worst_effect, effects, effect_details,
+                                  parents_called, allele_count,
+                                  allele_frequencey, person_genotypes)
 
 
 for out_file in out_files:
